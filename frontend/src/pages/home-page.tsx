@@ -9,6 +9,7 @@ function HomePage() {
   const [posts, setPosts] = useState<Post[]>([]);
 
   useEffect(() => {
+   console.log("VITE_API_PATH:", import.meta.env.VITE_API_PATH);  // Log the value of VITE_API_PATH
     axios
       .get(import.meta.env.VITE_API_PATH + '/api/posts')
       .then((response) => {
