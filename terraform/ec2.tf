@@ -27,21 +27,70 @@ resource "aws_security_group" "allow_user_to_connect" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    description = "port 80 allow"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "port 443 allow"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+    # Inbound rules
+    ingress {
+        from_port   = 22
+        to_port     = 22
+        protocol    = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+        description = "Allow SSH access"
+    }
+    ingress {
+        from_port = 80
+        to_port = 80
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+        description = "Allow HTTP access"
+    }
+    ingress {
+        from_port = 3000
+        to_port = 32767
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+        description = "Allow all traffic on ports 3000-32767"
+    }
+    ingress {
+        from_port = 6379
+        to_port = 6379
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+        description = "Allow Redis access"
+    }
+    ingress {
+        from_port = 443
+        to_port = 443
+        protocol = "tcp"    
+        cidr_blocks = ["0.0.0.0/0"]
+        description = "Allow HTTPS access"
+    }
+    ingress {
+        from_port = 465
+        to_port = 465
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+        description = "Allow SMTPS access"
+    }
+    ingress {
+        from_port = 3000
+        to_port = 10000
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+        description = "Allow traffic on ports 3000-10000"
+    }
+    ingress {
+        from_port = 25
+        to_port = 25
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+        description = "Allow SMTP access"
+    }
+    ingress {
+        from_port = 6443
+        to_port = 6443
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+        description = "Allow Kubernetes API access"
+    }
 
   tags = {
     Name = "mysecurity"
