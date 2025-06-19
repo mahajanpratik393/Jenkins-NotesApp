@@ -1,7 +1,7 @@
 # SSH key pair
 resource "aws_key_pair" "deployer" {
   key_name   = "key"
-  public_key = file(""C:/Users/Farhan/.ssh/key.pub")
+  public_key = file(""~/.ssh/key.pubh")
 }
 
 # Default VPC (assumes AWS default VPC exists)
