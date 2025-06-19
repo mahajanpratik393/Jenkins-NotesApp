@@ -145,7 +145,7 @@ sudo apt-get install jenkins -y
                        --nodes-max=2 \
                        --node-volume-size=29 \
                        --ssh-access \
-                       --ssh-public-key=key 
+                       --ssh-public-key=node-key 
   ```
 > [!Note]
 >  Make sure the ssh-public-key "eks-nodegroup-key is available in your aws account"
