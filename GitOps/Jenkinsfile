@@ -1,6 +1,6 @@
 @Library('Shared') _
 pipeline {
-    agent {label 'Node'}
+    agent { label 'Node' }
     
     parameters {
         string(name: 'FRONTEND_DOCKER_TAG', defaultValue: '', description: 'Frontend Docker tag of the image built by the CI job')
@@ -8,78 +8,98 @@ pipeline {
     }
 
     stages {
-        stage("Workspace cleanup"){
-            steps{
-                script{
+        stage("Workspace cleanup") {
+            steps {
+                script {
                     cleanWs()
                 }
             }
         }
-        
+
         stage('Git: Code Checkout') {
             steps {
-                script{
-                    code_checkout("https://github.com/LondheShubham153/Wanderlust-Mega-Project.git","main")
+                script {
+                    code_checkout("https://github.com/farhan24680/Wanderlust-Mega-Project.git", "ecr")
                 }
             }
         }
-        
+
         stage('Verify: Docker Image Tags') {
             steps {
-                script{
+                script {
                     echo "FRONTEND_DOCKER_TAG: ${params.FRONTEND_DOCKER_TAG}"
                     echo "BACKEND_DOCKER_TAG: ${params.BACKEND_DOCKER_TAG}"
                 }
             }
         }
-        
-        
-        stage("Update: Kubernetes manifests"){
-            steps{
-                script{
-                    dir('kubernetes'){
-                        sh """
-                            sed -i -e s/wanderlust-backend-beta.*/wanderlust-backend-beta:${params.BACKEND_DOCKER_TAG}/g backend.yaml
-                        """
+
+        stage("Verify: Docker Images Exist in ECR") {
+            steps {
+                script {
+                    def checkImage = { repo, tag ->
+                        def result = sh(script: """
+                            aws ecr describe-images \
+                            --region ${env.AWS_REGION} \
+                            --repository-name ${repo} \
+                            --image-ids imageTag=${tag} \
+                            --query 'imageDetails[0].imageTags[0]' \
+                            --output text || echo "NOT_FOUND"
+                        """, returnStdout: true).trim()
+
+                        if (result == "NOT_FOUND") {
+                            error "Image ${repo}:${tag} does not exist in ECR!"
+                        } else {
+                            echo "✅ Image ${repo}:${tag} exists in ECR."
+                        }
                     }
-                    
-                    dir('kubernetes'){
-                        sh """
-                            sed -i -e s/wanderlust-frontend-beta.*/wanderlust-frontend-beta:${params.FRONTEND_DOCKER_TAG}/g frontend.yaml
-                        """
-                    }
-                    
+
+                    checkImage(env.BACKEND_REPO, params.BACKEND_DOCKER_TAG)
+                    checkImage(env.FRONTEND_REPO, params.FRONTEND_DOCKER_TAG)
                 }
             }
         }
-        
-        stage("Git: Code update and push to GitHub"){
-            steps{
-                script{
+
+        stage("Update: Kubernetes manifests") {
+            steps {
+                script {
+                    dir('kubernetes') {
+                        sh """
+                            sed -i -e s/wanderlust-backend-beta.*/wanderlust-backend-beta:${params.BACKEND_DOCKER_TAG}/g backend.yaml
+                            sed -i -e s/wanderlust-frontend-beta.*/wanderlust-frontend-beta:${params.FRONTEND_DOCKER_TAG}/g frontend.yaml
+                        """
+                    }
+                }
+            }
+        }
+
+        stage("Git: Code update and push to GitHub") {
+            steps {
+                script {
                     withCredentials([gitUsernamePassword(credentialsId: 'Github-cred', gitToolName: 'Default')]) {
                         sh '''
                         echo "Checking repository status: "
                         git status
-                    
+
                         echo "Adding changes to git: "
                         git add .
-                        
-                        echo "Commiting changes: "
+
+                        echo "Committing changes: "
                         git commit -m "Updated environment variables"
-                        
+
                         echo "Pushing changes to github: "
-                        git push https://github.com/LondheShubham153/Wanderlust-Mega-Project.git main
-                    '''
+                        git push https://github.com/farhan24680/Wanderlust-Mega-Project.git ecr
+                        '''
                     }
                 }
             }
         }
     }
-  post {
+
+    post {
         success {
             script {
                 emailext attachLog: true,
-                from: 'trainwithshubham@gmail.com',
+                from: 'tcshoneywell3@gmail.com',
                 subject: "Wanderlust Application has been updated and deployed - '${currentBuild.result}'",
                 body: """
                     <html>
@@ -95,15 +115,16 @@ pipeline {
                         </div>
                     </body>
                     </html>
-            """,
-            to: 'trainwithshubham@gmail.com',
-            mimeType: 'text/html'
+                """,
+                to: 'tcshoneywell3@gmail.com',
+                mimeType: 'text/html'
             }
         }
-      failure {
+
+        failure {
             script {
                 emailext attachLog: true,
-                from: 'trainwithshubham@gmail.com',
+                from: 'tcshoneywell3@gmail.com',
                 subject: "Wanderlust Application build failed - '${currentBuild.result}'",
                 body: """
                     <html>
@@ -116,9 +137,9 @@ pipeline {
                         </div>
                     </body>
                     </html>
-            """,
-            to: 'trainwithshubham@gmail.com',
-            mimeType: 'text/html'
+                """,
+                to: 'tcshoneywell3@gmail.com',
+                mimeType: 'text/html'
             }
         }
     }
