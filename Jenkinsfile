@@ -1,26 +1,26 @@
 @Library('Shared') _
 
 pipeline {
-    agent { label 'Node' }
+    agent any
 
     environment {
         SONAR_HOME = tool "Sonar"
-        AWS_REGION = 'ap-south-1'
-        ECR_REGISTRY = '420065944332.dkr.ecr.ap-south-1.amazonaws.com'
+        AWS_REGION = 'us-east-1' // Public ECR works only in this region
+        PUBLIC_ECR_REGISTRY = 'public.ecr.aws/e4p6x5z2'
         BACKEND_REPO = 'wanderlust-backend-beta'
         FRONTEND_REPO = 'wanderlust-frontend-beta'
     }
 
     parameters {
-        string(name: 'FRONTEND_DOCKER_TAG', defaultValue: '', description: 'Docker tag for frontend image')
-        string(name: 'BACKEND_DOCKER_TAG', defaultValue: '', description: 'Docker tag for backend image')
+        string(name: 'FRONTEND_DOCKER_TAG', defaultValue: '', description: 'Frontend image tag')
+        string(name: 'BACKEND_DOCKER_TAG', defaultValue: '', description: 'Backend image tag')
     }
 
     stages {
         stage("Validate Parameters") {
             steps {
                 script {
-                    if (params.FRONTEND_DOCKER_TAG == '' || params.BACKEND_DOCKER_TAG == '') {
+                    if (!params.FRONTEND_DOCKER_TAG || !params.BACKEND_DOCKER_TAG) {
                         error("FRONTEND_DOCKER_TAG and BACKEND_DOCKER_TAG must be provided.")
                     }
                 }
@@ -33,7 +33,7 @@ pipeline {
             }
         }
 
-        stage("Git: Code Checkout") {
+        stage('Git: Code Checkout') {
             steps {
                 script {
                     code_checkout("https://github.com/farhan24680/Wanderlust-Mega-Project.git", "ecr")
@@ -73,31 +73,67 @@ pipeline {
             }
         }
 
-        stage("Exporting Environment Variables") {
+        stage("Environment Setup") {
             parallel {
                 stage("Backend Env Setup") {
                     steps {
-                        dir("Automations") {
-                            sh "bash updatebackendnew.sh"
+                        withCredentials([[
+                            $class: 'AmazonWebServicesCredentialsBinding',
+                            credentialsId: 'aws-cred'
+                        ]]) {
+                            dir("Automations") {
+                                sh '''
+                                    aws sts get-caller-identity
+                                    bash updatebackendnew.sh
+                                '''
+                            }
                         }
                     }
                 }
 
                 stage("Frontend Env Setup") {
                     steps {
-                        dir("Automations") {
-                            sh "bash updatefrontendnew.sh"
+                        withCredentials([[
+                            $class: 'AmazonWebServicesCredentialsBinding',
+                            credentialsId: 'aws-cred'
+                        ]]) {
+                            dir("Automations") {
+                                sh '''
+                                    aws sts get-caller-identity
+                                    bash updatefrontendnew.sh
+                                '''
+                            }
                         }
                     }
                 }
             }
         }
 
-        stage("ECR: Ensure Repositories Exist") {
+        stage("Ensure Public ECR Repositories Exist") {
             steps {
-                script {
-                    createEcrRepoIfNotExists(env.BACKEND_REPO, env.AWS_REGION)
-                    createEcrRepoIfNotExists(env.FRONTEND_REPO, env.AWS_REGION)
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-cred'
+                ]]) {
+                    script {
+                        sh """
+                            # Ensure backend repo exists
+                            aws ecr-public describe-repositories \
+                              --region ${env.AWS_REGION} \
+                              --repository-names ${env.BACKEND_REPO} || \
+                            aws ecr-public create-repository \
+                              --region ${env.AWS_REGION} \
+                              --repository-name ${env.BACKEND_REPO}
+
+                            # Ensure frontend repo exists
+                            aws ecr-public describe-repositories \
+                              --region ${env.AWS_REGION} \
+                              --repository-names ${env.FRONTEND_REPO} || \
+                            aws ecr-public create-repository \
+                              --region ${env.AWS_REGION} \
+                              --repository-name ${env.FRONTEND_REPO}
+                        """
+                    }
                 }
             }
         }
@@ -106,22 +142,34 @@ pipeline {
             steps {
                 script {
                     dir('backend') {
-                        docker_build("${env.ECR_REGISTRY}/${env.BACKEND_REPO}", "${params.BACKEND_DOCKER_TAG}")
+                        sh """
+                            docker build -t ${env.PUBLIC_ECR_REGISTRY}/${env.BACKEND_REPO}:${params.BACKEND_DOCKER_TAG} .
+                        """
                     }
+
                     dir('frontend') {
-                        docker_build("${env.ECR_REGISTRY}/${env.FRONTEND_REPO}", "${params.FRONTEND_DOCKER_TAG}")
+                        sh """
+                            docker build -t ${env.PUBLIC_ECR_REGISTRY}/${env.FRONTEND_REPO}:${params.FRONTEND_DOCKER_TAG} .
+                        """
                     }
                 }
             }
         }
 
-        stage("Docker: Push to ECR") {
+        stage("Docker: Push to Public ECR") {
             steps {
-                script {
-                    ecrLogin(env.AWS_REGION, env.ECR_REGISTRY)
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-cred'
+                ]]) {
+                    script {
+                        sh """
+                            aws ecr-public get-login-password --region ${env.AWS_REGION} | docker login --username AWS --password-stdin public.ecr.aws
 
-                    docker_push("${env.ECR_REGISTRY}/${env.BACKEND_REPO}", "${params.BACKEND_DOCKER_TAG}")
-                    docker_push("${env.ECR_REGISTRY}/${env.FRONTEND_REPO}", "${params.FRONTEND_DOCKER_TAG}")
+                            docker push ${env.PUBLIC_ECR_REGISTRY}/${env.BACKEND_REPO}:${params.BACKEND_DOCKER_TAG}
+                            docker push ${env.PUBLIC_ECR_REGISTRY}/${env.FRONTEND_REPO}:${params.FRONTEND_DOCKER_TAG}
+                        """
+                    }
                 }
             }
         }
@@ -137,3 +185,4 @@ pipeline {
         }
     }
 }
+
