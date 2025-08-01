@@ -12,7 +12,7 @@ WanderLust is a simple MERN travel blog website ✈ This project is aimed to hel
 ### <mark>Project Deployment Flow:</mark>
 <img src="https://github.com/DevMadhup/Wanderlust-Mega-Project/blob/main/Assets/DevSecOps%2BGitOps.gif" />
 
-#
+#skjbqewr
 
 ## Tech stack used in this project:
 - GitHub (Code)
